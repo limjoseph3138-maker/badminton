@@ -1,0 +1,21 @@
+{
+  "name": "금관클럽 배드민턴 전적관리",
+  "short_name": "금관클럽",
+  "description": "금관클럽 배드민턴 경기 전적 및 순위 관리 앱",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

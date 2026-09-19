@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>금관클럽 배드민턴 전적관리</title>
+
+  <!-- PWA 필수 메타 태그 & 매니페스트 연동 -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="금관클럽">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
+  <!-- 캡처 라이브러리 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Malgun Gothic", sans-serif; background: #0f172a; color: #f8fafc; padding: 12px; }
+
+    .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .app-title { font-size: 17px; font-weight: bold; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
+    .header-btns { display: flex; gap: 6px; }
+    .hdr-btn { background: #334155; color: #cbd5e1; border: none; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; }
+
+    #loadingSpinner { display: none; font-size: 12px; color: #38bdf8; margin-bottom: 8px; text-align: center; }
+
+    /* 필터 카드 */
+    .filter-card { background: #1e293b; padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .filter-tabs { display: flex; gap: 6px; }
+    .tab-btn { flex: 1; padding: 7px 0; border: none; border-radius: 6px; background: #334155; color: #94a3b8; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.15s; }
+    .tab-btn.active { background: #0284c7; color: #fff; }
+    .date-pick-wrap { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #cbd5e1; }
+    .date-input { background: #0f172a; border: 1px solid #475569; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 13px; outline: none; }
+
+    /* 대진 보드 */
+    .match-board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; background: #1e293b; padding: 12px; border-radius: 14px; margin-bottom: 10px; }
+    .team-col { display: flex; flex-direction: column; gap: 8px; }
+    .team-label { font-size: 13px; font-weight: 800; color: #94a3b8; text-align: center; }
+    
+    .slot { height: 46px; border: 2px dashed #475569; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #94a3b8; background: rgba(255,255,255,0.02); cursor: pointer; transition: 0.15s; }
+    .slot.filled { border-style: solid; border-color: #38bdf8; background: #0284c7; color: #ffffff; font-weight: bold; }
+
+    .result-toggle-box { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .vs-text { font-size: 11px; font-weight: bold; color: #64748b; }
+    .win-lose-btn { padding: 8px 12px; border-radius: 8px; font-size: 15px; font-weight: 900; border: none; cursor: pointer; width: 62px; text-align: center; }
+    .btn-win { background: #22c55e; color: #fff; }
+    .btn-lose { background: #ef4444; color: #fff; }
+
+    .action-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .btn-main { flex: 1; padding: 13px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-add { background: #0284c7; color: #fff; }
+    .btn-reset { background: #475569; color: #fff; flex: 0.25; }
+
+    .section-title { font-size: 13px; color: #94a3b8; margin: 12px 0 6px 0; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+    .roster-wrap { display: flex; flex-wrap: wrap; gap: 8px; background: #1e293b; padding: 10px; border-radius: 12px; min-height: 70px; }
+    .player-chip { background: #334155; color: #f8fafc; padding: 8px 13px; border-radius: 18px; font-size: 14px; font-weight: 500; cursor: pointer; }
+    .player-chip.in-use { opacity: 0.25; pointer-events: none; }
+
+    #captureArea { background: #0f172a; padding: 4px; border-radius: 14px; }
+
+    .stats-table-wrap { background: #1e293b; border-radius: 12px; overflow: hidden; }
+    .stats-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; }
+    .stats-table th { background: #334155; color: #94a3b8; padding: 8px 6px; font-weight: 600; font-size: 12px; }
+    .stats-table td { padding: 9px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .win-num { color: #4ade80; font-weight: bold; }
+    .lose-num { color: #f87171; }
+    .rate-bar-bg { background: #334155; height: 5px; border-radius: 3px; width: 45px; margin: 3px auto 0 auto; overflow: hidden; }
+    .rate-bar-fill { background: #38bdf8; height: 100%; }
+
+    .history-card { background: #1e293b; padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #38bdf8; }
+    .history-card.team-a-win { border-left-color: #22c55e; }
+    .history-card.team-a-lose { border-left-color: #ef4444; }
+    .history-left { display: flex; align-items: center; gap: 6px; }
+    .tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .tag-win { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .tag-lose { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .del-btn { color: #64748b; font-size: 16px; cursor: pointer; padding: 0 4px; }
+
+    .share-btn { width: 100%; background: #fee500; color: #181600; padding: 14px; border: none; border-radius: 12px; font-size: 15px; font-weight: 900; cursor: pointer; margin: 16px 0 24px 0; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(254, 229, 0, 0.25); }
+
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 99; padding: 20px; }
+    .modal-content { background: #1e293b; width: 100%; max-width: 380px; border-radius: 14px; padding: 18px; max-height: 85vh; overflow-y: auto; }
+    .modal-header { font-size: 16px; font-weight: bold; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .player-edit-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .modal-input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; }
+    .btn-small { padding: 6px 10px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: bold; }
+    .img-preview-box { text-align: center; margin: 10px 0; }
+    .img-preview-box img { max-width: 100%; border-radius: 8px; border: 1px solid #475569; }
+  </style>
+</head>
+<body>
+
+  <div class="app-header">
+    <div class="app-title">🏸 금관클럽 전적관리</div>
+    <div class="header-btns">
+      <button class="hdr-btn" onclick="fetchCloudData()">🔄 동기화</button>
+      <button class="hdr-btn" onclick="openRosterModal()">⚙️ 선수 관리</button>
+    </div>
+  </div>
+
+  <div id="loadingSpinner">구글 시트 동기화 중... ⏳</div>
+
+  <!-- 기간 필터 -->
+  <div class="filter-card">
+    <div class="filter-tabs">
+      <button class="tab-btn active" id="tabDaily" onclick="setPeriod('daily')">일별 랭킹</button>
+      <button class="tab-btn" id="tabMonthly" onclick="setPeriod('monthly')">월간 랭킹</button>
+      <button class="tab-btn" id="tabAll" onclick="setPeriod('all')">전체 누적</button>
+    </div>
+    <div class="date-pick-wrap" id="datePickerContainer">
+      <span>조회 일자:</span>
+      <input type="date" id="selectedDate" class="date-input" onchange="onDateChanged()">
+    </div>
+  </div>
+
+  <!-- 대진 보드 (일별 랭킹 모드일 때만 노출) -->
+  <div id="recordSection">
+    <div class="match-board">
+      <div class="team-col">
+        <span class="team-label">팀 A</span>
+        <div class="slot" id="slotA0" onclick="clearSlot('A', 0)">팀 A 1</div>
+        <div class="slot" id="slotA1" onclick="clearSlot('A', 1)">팀 A 2</div>
+      </div>
+
+      <div class="result-toggle-box">
+        <button class="win-lose-btn btn-win" id="resultBtn" onclick="toggleResult()">승</button>
+        <span class="vs-text">VS</span>
+        <span style="font-size: 10px; color: #94a3b8;">(팀 A 기준)</span>
+      </div>
+
+      <div class="team-col">
+        <span class="team-label">팀 B</span>
+        <div class="slot" id="slotB0" onclick="clearSlot('B', 0)">팀 B 1</div>
+        <div class="slot" id="slotB1" onclick="clearSlot('B', 1)">팀 B 2</div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-main btn-add" id="btnAddMatch" onclick="addMatch()">➕ 경기 추가 (시트 저장)</button>
+      <button class="btn-main btn-reset" onclick="resetSlots()">비우기</button>
+    </div>
+
+    <div class="section-title">
+      <span>선수 선택 (터치)</span>
+      <span id="playerCount">0명</span>
+    </div>
+    <div class="roster-wrap" id="rosterList"></div>
+  </div>
+
+  <!-- 결과 캡처 영역 -->
+  <div id="captureArea">
+    <div class="section-title" style="margin-top:8px;">
+      <span id="statsHeaderTitle">📊 랭킹 (다승순 정렬)</span>
+      <span style="font-size:11px; font-weight:normal; color:#64748b;">(다승 ➔ 승률순)</span>
+    </div>
+    <div class="stats-table-wrap">
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>순위</th>
+            <th style="text-align:left; padding-left:12px;">선수명</th>
+            <th>전적 (승수)</th>
+            <th>승률</th>
+          </tr>
+        </thead>
+        <tbody id="statsTableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">
+      <span id="historyHeaderTitle">📋 경기 히스토리</span>
+      <span id="historyCount">0경기</span>
+    </div>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- 이미지 공유 버튼 -->
+  <button class="share-btn" onclick="shareAsImage()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#181600"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+    결과 이미지로 저장 및 공유 (카카오톡)
+  </button>
+
+  <!-- 이미지 모달 -->
+  <div class="modal-overlay" id="imageModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>🖼️ 전적 이미지 완성</span>
+        <span style="cursor:pointer;" onclick="closeImageModal()">✕</span>
+      </div>
+      <div class="img-preview-box">
+        <img id="generatedImg" src="" alt="전적 결과">
+      </div>
+      <button class="btn-main btn-reset" style="width:100%; padding:10px;" onclick="closeImageModal()">닫기</button>
+    </div>
+  </div>
+
+  <!-- 선수 관리 모달 -->
+  <div class="modal-overlay" id="rosterModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>선수 명단 편집</span>
+        <span style="cursor:pointer;" onclick="closeRosterModal()">✕</span>
+      </div>
+      <div id="modalPlayerList"></div>
+      <div style="display:flex; gap:6px; margin-top:12px;">
+        <input type="text" id="newPlayerName" class="modal-input" placeholder="새 선수 이름">
+        <button class="btn-small" style="background:#22c55e; color:#fff;" onclick="addNewPlayer()">추가</button>
+      </div>
+      <button class="btn-main btn-add" style="margin-top:16px; padding:10px;" onclick="closeRosterModal()">저장 및 시트 동기화</button>
+    </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbye5-bNqJKDKWvmaGBqmvPw6cYzj16Uz0J2hG0zimjCT-GPRlM5BrX899XW8FiaIgwNhA/exec";
+
+    let players = [];
+    let matchHistory = [];
+    let currentMatch = { A: [null, null], B: [null, null], result: '승' };
+    let currentPeriod = 'daily';
+
+    function getTodayString() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function normalizeDate(val) {
+      if (!val) return getTodayString();
+      const str = String(val).trim();
+      const match = str.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/);
+      if (match) {
+        const parts = match[0].split(/[-./]/);
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dt = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dt}`;
+      }
+      return str.slice(0, 10);
+    }
+
+    function normalizeTeam(teamData) {
+      if (Array.isArray(teamData)) {
+        return teamData.filter(Boolean);
+      }
+      if (typeof teamData === 'string') {
+        return teamData.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      return [];
+    }
+
+    document.getElementById("selectedDate").value = getTodayString();
+
+    function showLoading(show) {
+      document.getElementById("loadingSpinner").style.display = show ? "block" : "none";
+    }
+
+    const cachedLocal = localStorage.getItem("badminton_local_cache");
+    if (cachedLocal) {
+      try {
+        const parsed = JSON.parse(cachedLocal);
+        players = parsed.players || [];
+        matchHistory = (parsed.history || []).map(m => ({
+          ...m,
+          date: normalizeDate(m.date),
+          teamA: normalizeTeam(m.teamA),
+          teamB: normalizeTeam(m.teamB)
+        }));
+        renderAll();
+      } catch (e) {}
+    }
+
+    async function fetchCloudData() {
+      showLoading(true);
+      try {
+        const res = await fetch(SCRIPT_URL + "?action=getData");
+        const data = await res.json();
+        players = data.players || [];
+        matchHistory = (data.history || []).map(m => ({
+          ...m,
+          date: normalizeDate(m.date),
+          teamA: normalizeTeam(m.teamA),
+          teamB: normalizeTeam(m.teamB)
+        }));
+        
+        localStorage.setItem("badminton_local_cache", JSON.stringify({ players, history: matchHistory }));
+        renderAll();
+      } catch (err) {
+        console.error("데이터 동기화 실패:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function setPeriod(period) {
+      currentPeriod = period;
+      document.getElementById("tabDaily").classList.toggle("active", period === 'daily');
+      document.getElementById("tabMonthly").classList.toggle("active", period === 'monthly');
+      document.getElementById("tabAll").classList.toggle("active", period === 'all');
+
+      const dateContainer = document.getElementById("datePickerContainer");
+      const recordSection = document.getElementById("recordSection");
+
+      if (period === 'daily') {
+        dateContainer.style.display = "flex";
+        recordSection.style.display = "block";
+      } else {
+        dateContainer.style.display = "none";
+        recordSection.style.display = "none";
+      }
+      renderAll();
+    }
+
+    function onDateChanged() {
+      renderAll();
+    }
+
+    function getFilteredHistory() {
+      const selectedDate = document.getElementById("selectedDate").value;
+
+      return matchHistory.filter(m => {
+        const matchDate = normalizeDate(m.date);
+        if (currentPeriod === 'daily') {
+          return matchDate === selectedDate;
+        } else if (currentPeriod === 'monthly') {
+          return matchDate.startsWith(selectedDate.slice(0, 7));
+        } else {
+          return true;
+        }
+      });
+    }
+
+    async function addMatch() {
+      const { A, B, result } = currentMatch;
+      if (A.includes(null) || B.includes(null)) {
+        alert("선수 4명을 모두 배치해 주세요.");
+        return;
+      }
+
+      const currentFour = [...A, ...B].sort();
+      const currentFourKey = currentFour.join(',');
+
+      const duplicateMatches = matchHistory.filter(m => {
+        const pastFour = [...normalizeTeam(m.teamA), ...normalizeTeam(m.teamB)].sort();
+        return pastFour.join(',') === currentFourKey;
+      });
+
+      if (duplicateMatches.length > 0) {
+        const lastMatch = duplicateMatches[0];
+        const lastDate = lastMatch.date || "이전";
+        const lastTeamA = normalizeTeam(lastMatch.teamA).join(', ');
+        const lastTeamB = normalizeTeam(lastMatch.teamB).join(', ');
+        
+        const message = `⚠️ [동일 매칭 주의]\n\n` +
+          `현재 4명(${currentFour.join(', ')})은 이미 함께 뛴 경기가 총 ${duplicateMatches.length}회 있습니다.\n` +
+          `직전 매치: [${lastDate}] ${lastTeamA} VS ${lastTeamB}\n\n` +
+          `확인 후 이대로 기록하시겠습니까?`;
+
+        if (!confirm(message)) {
+          return;
+        }
+      }
+
+      const matchDate = document.getElementById("selectedDate").value || getTodayString();
+      const newRecord = {
+        id: Date.now(),
+        teamA: [...A],
+        teamB: [...B],
+        result: result,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: matchDate
+      };
+
+      matchHistory.unshift(newRecord);
+      localStorage.setItem("badminton_local_cache", JSON.stringify({ players, history: matchHistory }));
+      renderAll();
+      resetSlots();
+
+      showLoading(true);
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "addMatch", match: newRecord })
+        });
+      } catch (err) {
+        console.error("저장 오류:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    async function deleteMatch(id) {
+      if (!confirm("이 기록을 삭제하시겠습니까? (시트에서도 함께 삭제됩니다)")) return;
+      matchHistory = matchHistory.filter(m => m.id !== id);
+      localStorage.setItem("badminton_local_cache", JSON.stringify({ players, history: matchHistory }));
+      renderAll();
+
+      showLoading(true);
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "deleteMatch", id: id })
+        });
+      } catch (err) {
+        console.error("삭제 오류:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderRoster() {
+      const rosterDiv = document.getElementById("rosterList");
+      rosterDiv.innerHTML = "";
+      players.forEach(name => {
+        const chip = document.createElement("div");
+        chip.className = "player-chip";
+        chip.textContent = name;
+        chip.onclick = () => assignPlayerAuto(name);
+        rosterDiv.appendChild(chip);
+      });
+      document.getElementById("playerCount").textContent = `${players.length}명`;
+      updateSlotUI();
+    }
+
+    function assignPlayerAuto(name) {
+      if (isPlayerSelected(name)) return;
+      for (let team of ['A', 'B']) {
+        for (let i = 0; i < 2; i++) {
+          if (!currentMatch[team][i]) {
+            currentMatch[team][i] = name;
+            updateSlotUI();
+            return;
+          }
+        }
+      }
+    }
+
+    function clearSlot(team, index) {
+      currentMatch[team][index] = null;
+      updateSlotUI();
+    }
+
+    function isPlayerSelected(name) {
+      return currentMatch.A.includes(name) || currentMatch.B.includes(name);
+    }
+
+    function toggleResult() {
+      const btn = document.getElementById("resultBtn");
+      if (currentMatch.result === '승') {
+        currentMatch.result = '패';
+        btn.textContent = "패";
+        btn.className = "win-lose-btn btn-lose";
+      } else {
+        currentMatch.result = '승';
+        btn.textContent = "승";
+        btn.className = "win-lose-btn btn-win";
+      }
+    }
+
+    function updateSlotUI() {
+      ['A', 'B'].forEach(t => {
+        for (let i = 0; i < 2; i++) {
+          const el = document.getElementById(`slot${t}${i}`);
+          const name = currentMatch[t][i];
+          if (name) {
+            el.textContent = name;
+            el.classList.add("filled");
+          } else {
+            el.textContent = `팀 ${t} ${i + 1}`;
+            el.classList.remove("filled");
+          }
+        }
+      });
+
+      document.querySelectorAll(".player-chip").forEach(chip => {
+        chip.classList.toggle("in-use", isPlayerSelected(chip.textContent));
+      });
+    }
+
+    function resetSlots() {
+      currentMatch.A = [null, null];
+      currentMatch.B = [null, null];
+      updateSlotUI();
+    }
+
+    function calculateStats(filteredMatches) {
+      const statsMap = {};
+      players.forEach(p => statsMap[p] = { name: p, total: 0, win: 0, lose: 0, rate: 0 });
+
+      filteredMatches.forEach(m => {
+        const aWon = m.result === '승';
+        const teamA = normalizeTeam(m.teamA);
+        const teamB = normalizeTeam(m.teamB);
+
+        teamA.forEach(p => {
+          if (!statsMap[p]) statsMap[p] = { name: p, total: 0, win: 0, lose: 0, rate: 0 };
+          statsMap[p].total++;
+          if (aWon) statsMap[p].win++; else statsMap[p].lose++;
+        });
+        teamB.forEach(p => {
+          if (!statsMap[p]) statsMap[p] = { name: p, total: 0, win: 0, lose: 0, rate: 0 };
+          statsMap[p].total++;
+          if (aWon) statsMap[p].lose++; else statsMap[p].win++;
+        });
+      });
+
+      const statsList = Object.values(statsMap).map(s => {
+        s.rate = s.total > 0 ? Math.round((s.win / s.total) * 100) : 0;
+        return s;
+      });
+
+      statsList.sort((a, b) => {
+        if (b.win !== a.win) return b.win - a.win;
+        if (b.rate !== a.rate) return b.rate - a.rate;
+        return b.total - a.total;
+      });
+
+      return statsList;
+    }
+
+    function renderStats(filteredMatches) {
+      const statsList = calculateStats(filteredMatches);
+      const tbody = document.getElementById("statsTableBody");
+
+      const headerTitle = document.getElementById("statsHeaderTitle");
+      const selDate = document.getElementById("selectedDate").value;
+      if (currentPeriod === 'daily') headerTitle.textContent = `📊 [${selDate}] 일일 랭킹 (다승순)`;
+      else if (currentPeriod === 'monthly') headerTitle.textContent = `📊 [${selDate.slice(0, 7)}] 월간 랭킹 (다승순)`;
+      else headerTitle.textContent = `📊 [전체 누적] 명예의 전당 (다승순)`;
+
+      if (statsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:16px; color:#64748b;">등록된 선수가 없습니다.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = statsList.map((s, idx) => {
+        const medal = idx === 0 && s.win > 0 ? '🥇 ' : idx === 1 && s.win > 0 ? '🥈 ' : idx === 2 && s.win > 0 ? '🥉 ' : `${idx + 1}`;
+        return `
+          <tr>
+            <td style="color:#94a3b8; font-weight:bold;">${medal}</td>
+            <td style="text-align:left; font-weight:bold; padding-left:12px;">${s.name}</td>
+            <td>
+              <span class="win-num">${s.win}승</span> 
+              <span class="lose-num">${s.lose}패</span>
+              <span style="font-size:11px; color:#64748b;">(${s.total}전)</span>
+            </td>
+            <td>
+              <span style="font-weight:bold; color:${s.rate >= 50 ? '#38bdf8' : '#cbd5e1'};">${s.rate}%</span>
+              <div class="rate-bar-bg">
+                <div class="rate-bar-fill" style="width: ${s.rate}%;"></div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderHistory(filteredMatches) {
+      const list = document.getElementById("historyList");
+      document.getElementById("historyCount").textContent = `${filteredMatches.length}경기`;
+
+      if (filteredMatches.length === 0) {
+        list.innerHTML = `<div style="text-align:center; color:#64748b; padding:16px 0; font-size:13px;">해당 기간에 기록된 경기가 없습니다.</div>`;
+        return;
+      }
+
+      list.innerHTML = filteredMatches.map((m, idx) => {
+        const isWin = m.result === '승';
+        const teamA = normalizeTeam(m.teamA);
+        const teamB = normalizeTeam(m.teamB);
+        const dateTag = currentPeriod !== 'daily' && m.date ? `<span style="font-size:10px; color:#64748b; margin-right:4px;">[${m.date.slice(5)}]</span>` : '';
+        return `
+          <div class="history-card ${isWin ? 'team-a-win' : 'team-a-lose'}">
+            <div class="history-left">
+              <span style="color:#94a3b8; font-size:12px;">#${filteredMatches.length - idx}</span>
+              ${dateTag}
+              <strong style="color:${isWin ? '#4ade80' : '#f87171'}">${teamA.join('/')}</strong>
+              <span class="tag ${isWin ? 'tag-win' : 'tag-lose'}">${m.result}</span>
+              <span style="color:#64748b; font-size:11px;">vs</span>
+              <span>${teamB.join('/')}</span>
+            </div>
+            <span class="del-btn" onclick="deleteMatch(${m.id})">✕</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      const filtered = getFilteredHistory();
+      renderStats(filtered);
+      renderHistory(filtered);
+      renderRoster();
+    }
+
+    async function shareAsImage() {
+      const filtered = getFilteredHistory();
+      if (filtered.length === 0) {
+        alert("공유할 경기 기록이 없습니다.");
+        return;
+      }
+      const delBtns = document.querySelectorAll('.del-btn');
+      delBtns.forEach(b => b.style.display = 'none');
+
+      try {
+        const captureEl = document.getElementById("captureArea");
+        const canvas = await html2canvas(captureEl, { backgroundColor: '#0f172a', scale: 2 });
+        delBtns.forEach(b => b.style.display = 'inline');
+
+        canvas.toBlob(blob => {
+          const imgUrl = URL.createObjectURL(blob);
+          document.getElementById("generatedImg").src = imgUrl;
+          document.getElementById("imageModal").style.display = "flex";
+        }, 'image/png');
+      } catch (err) {
+        delBtns.forEach(b => b.style.display = 'inline');
+        alert("이미지 생성 오류: " + err.message);
+      }
+    }
+
+    function closeImageModal() {
+      document.getElementById("imageModal").style.display = "none";
+    }
+
+    function openRosterModal() {
+      renderModalPlayers();
+      document.getElementById("rosterModal").style.display = "flex";
+    }
+
+    async function closeRosterModal() {
+      document.getElementById("rosterModal").style.display = "none";
+      renderAll();
+      showLoading(true);
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "savePlayers", players: players })
+        });
+      } catch (err) {
+        console.error("선수 저장 오류:", err);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderModalPlayers() {
+      const container = document.getElementById("modalPlayerList");
+      container.innerHTML = players.map((name, i) => `
+        <div class="player-edit-row">
+          <input type="text" class="modal-input" value="${name}" onchange="players[${i}] = this.value.trim()">
+          <button class="btn-small" style="background:#ef4444; color:#fff;" onclick="players.splice(${i}, 1); renderModalPlayers();">삭제</button>
+        </div>
+      `).join('');
+    }
+
+    function addNewPlayer() {
+      const input = document.getElementById("newPlayerName");
+      const val = input.value.trim();
+      if (val && !players.includes(val)) {
+        players.push(val);
+        input.value = "";
+        renderModalPlayers();
+      }
+    }
+
+    // 초기 실행
+    fetchCloudData();
+  </script>
+
+  <!-- PWA Service Worker 등록 스크립트 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('PWA ServiceWorker 등록 성공:', reg.scope))
+          .catch(err => console.log('PWA ServiceWorker 등록 실패:', err));
+      });
+    }
+  </script>
+</body>
+</html>
